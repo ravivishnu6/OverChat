@@ -1,5 +1,14 @@
-use axum::{Json, Router, http::StatusCode, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+
+struct AppState {
+    user_name: Mutex<String>,
+}
 
 #[derive(Deserialize)]
 struct NameInput {
@@ -11,34 +20,38 @@ struct GreetResponse {
     message: String,
 }
 
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
-}
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/greet", post(greet_handler));
+    let shared_state = Arc::new(AppState {
+        user_name: Mutex::new("Guest".to_string()),
+    });
+    let app = Router::new()
+        .route("/name", get(get_name))
+        .route("/name", post(update_name))
+        .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    println!("API is running on Localhost:3000");
+    println!("🚀 Server with Memory running at http://127.0.0.1:3000");
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn greet_handler(
+async fn get_name(State(state): State<Arc<AppState>>) -> Json<GreetResponse> {
+    let name = state.user_name.lock().unwrap();
+    Json(GreetResponse {
+        message: format!("The current user is {}", name),
+    })
+}
+
+async fn update_name(
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<NameInput>,
-) -> Result<(StatusCode, Json<GreetResponse>), (StatusCode, Json<ErrorResponse>)> {
-    if payload.name.len() < 3 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: String::from("Name must be atleast 3 characters long"),
-            }),
-        ));
-    }
+) -> Json<GreetResponse> {
+    let mut name = state.user_name.lock().unwrap();
+    *name = payload.name.clone();
 
-    let greeting = format!("Hello {}", payload.name);
-
-    Ok((StatusCode::OK, Json(GreetResponse { message: greeting })))
+    Json(GreetResponse {
+        message: format!("Name updated to {}", name),
+    })
 }

@@ -1,11 +1,11 @@
 info:
-  name: Hello<name>
+  name: Update Name
   type: http
   seq: 1
 
 http:
   method: POST
-  url: http://localhost:3000/greet
+  url: http://localhost:3000/name
   body:
     type: json
     data: |-
